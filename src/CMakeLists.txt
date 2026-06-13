@@ -2,19 +2,21 @@ cmake_minimum_required(VERSION 3.15)
 
 enable_language(C CXX)
 
-find_package(Eigen3 3.3 REQUIRED)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
+find_package(Eigen3 REQUIRED)
 
 # Create library for tools
 add_library(mdance_tools STATIC
-    tools/bts.cpp 
-    tools/cluster.cpp 
+    tools/bts.cpp
+    tools/cluster.cpp
     tools/hc_utils.cpp
-    tools/esim.cpp 
+    tools/esim.cpp
     tools/scores.cpp
+    tools/result_utils.cpp
 )
-target_include_directories(mdance_tools PUBLIC 
-    tools
-    ${EIGEN3_INCLUDE_DIRS})
+target_include_directories(mdance_tools PUBLIC tools)
+target_link_libraries(mdance_tools PUBLIC Eigen3::Eigen)
 
 # create library for kmeans
 add_library(mdance_kmeans STATIC 
@@ -38,17 +40,31 @@ target_include_directories(mdance_helm PUBLIC
 target_link_libraries(mdance_helm PUBLIC mdance_tools)
 
 # create divine library
-add_library(mdance_divine STATIC 
+add_library(mdance_divine STATIC
     cluster/divine.cpp
 )
 target_link_libraries(mdance_divine PUBLIC mdance_tools)
 
+# create equal library
+add_library(mdance_equal STATIC
+    cluster/equal.cpp
+)
+target_link_libraries(mdance_equal PUBLIC mdance_tools)
+
+# create prime library
+add_library(mdance_prime STATIC
+    cluster/prime.cpp
+)
+target_link_libraries(mdance_prime PUBLIC mdance_tools)
+
 # create main mdance library
 add_library(mdance INTERFACE)
-target_link_libraries(mdance 
-    INTERFACE 
-        mdance_tools 
-        mdance_kmeans 
+target_link_libraries(mdance
+    INTERFACE
+        mdance_tools
+        mdance_kmeans
         mdance_helm
         mdance_divine
+        mdance_equal
+        mdance_prime
 )

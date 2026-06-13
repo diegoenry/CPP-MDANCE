@@ -159,6 +159,7 @@ void KmeansNANI::init_Mu() {
         sampleRowsRandom();
         break;
     
+    case MD::KinitType::KmeansPP:
     case MD::KinitType::VanillaKmeansPP:
         sampleRowsPlusPlus();
         break;
@@ -249,7 +250,7 @@ void KmeansNANI::run_lloyd(int Niter )  {
 }
 
 
-KmeansNANI::KmeansNANI(ArrayXXd data, int kClusters, MD::Metric mt, MD::KinitType kinit, int nAtoms, int percentage, int vectThreshold) : data(data), kClusters(kClusters), mt(mt), nAtoms(nAtoms), kinit(kinit), seed(seed), percentage(percentage) {
+KmeansNANI::KmeansNANI(ArrayXXd data, int kClusters, MD::Metric mt, MD::KinitType kinit, int nAtoms, int percentage, int vectThreshold) : data(data), kClusters(kClusters), mt(mt), nAtoms(nAtoms), kinit(kinit), seed(0), percentage(percentage) {
     centers = Mat::Zero(kClusters, data.cols());
     dist = Mat::Zero(data.rows(), kClusters);
     labels = Veci::Zero(data.rows());
@@ -258,7 +259,7 @@ KmeansNANI::KmeansNANI(ArrayXXd data, int kClusters, MD::Metric mt, MD::KinitTyp
     init_Mu();
     run_lloyd(300);
 }
-KmeansNANI::KmeansNANI(ArrayXXd data, int kClusters, MD::Metric mt, Mat centers, int nAtoms, int percentage, int vectThreshold) : data(data), kClusters(kClusters), mt(mt), nAtoms(nAtoms), kinit(kinit), seed(seed), percentage(percentage), centers(centers) {
+KmeansNANI::KmeansNANI(ArrayXXd data, int kClusters, MD::Metric mt, Mat centers, int nAtoms, int percentage, int vectThreshold) : data(data), kClusters(kClusters), mt(mt), nAtoms(nAtoms), kinit(MD::KinitType::StratAll), seed(0), percentage(percentage), centers(centers) {
     dist = Mat::Zero(data.rows(), kClusters);
     labels = Veci::Zero(data.rows());
     set_vectorization_threshold(vectThreshold);
