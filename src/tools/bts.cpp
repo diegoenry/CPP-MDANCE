@@ -426,48 +426,64 @@ Index getNewIndexN(const ArrayXXd& data, MD::Metric mt, ArrayXXd& selectedConden
  * Reference: https://github.com/mqcomplab/MDANCE/blob/016bd9aff30d1c2add26b36bfcf64aa665a34a1d/src/mdance/tools/bts.py#L652
 */
 ArrayXi repSample(const ArrayXXd& data, MD::Metric mt, int nAtoms, int nBins, double nSamples, bool hardCap) {
-    if (nSamples < 1) {
-        return repSample(data, mt, nAtoms, nBins, std::round(nSamples * data.rows()), hardCap);
-    }
-    std::cerr << "Cannot sample more than 100\% of the data" << std::endl;
-    return ArrayXi();
+    // nSamples in (0,1) is a fraction of the data; >= 1 is a literal count.
+    int n = (nSamples < 1) ? (int)std::round(nSamples * data.rows())
+                           : (int)std::round(nSamples);
+    return repSample(data, mt, nAtoms, nBins, n, hardCap);
 }
 ArrayXi repSample(const ArrayXXd& data, MD::Metric mt, int nAtoms, int nBins, int nSamples, bool hardCap) {
+    int N = (int)data.rows();
+    if (nSamples > N) nSamples = N;
+    if (nSamples <= 0) return ArrayXi();
+    if (nBins < 1) nBins = 1;
+
     ArrayXd compSims = calculateCompSim(data, nAtoms, mt);
     vector<pair<double,int>> compSimArray;
     compSimArray.reserve(compSims.size());
     for (int i=0; i<compSims.size(); ++i){
-        compSimArray.emplace_back(compSims[i],i);
+        compSimArray.emplace_back(compSims[i], i);
     }
     std::sort(compSimArray.begin(), compSimArray.end());
-    double mi = compSimArray[0].first;
-    double ma = compSimArray[compSims.size()-1].first;
 
+    double mi = compSimArray.front().first;
+    double ma = compSimArray.back().first;
+    double range = ma - mi;
 
-    int step = std::floor((ma - mi) / nBins);
+    // Distribute objects across nBins by complementary-similarity value.
     vector<vector<int>> bins(nBins);
-    int idx=0;
-    for (int i=0; i<compSims.size(); ++i) {
-        if (compSimArray[i].first - mi >= (idx+1)*step) {
-            ++idx;
+    if (range <= 0) {
+        for (auto& p : compSimArray) bins[0].push_back(p.second);
+    } else {
+        double binWidth = range / nBins;
+        for (auto& p : compSimArray) {
+            int b = (int)((p.first - mi) / binWidth);
+            if (b >= nBins) b = nBins - 1;   // the maximum value lands in the last bin
+            if (b < 0) b = 0;
+            bins[b].push_back(p.second);
         }
-        bins[idx].push_back(compSimArray[i].second);
     }
-    VectorXi sampledMols(nSamples);
-    int i=0;
-    int cnt=0;
-    while (sampledMols.size() < nSamples) {
-        for (int b=0; b<bins.size(); ++b) {
-            if (bins[b].size() > i) {
-                sampledMols[cnt] = bins[b][i];
-                ++cnt;
-                if (hardCap && cnt >= nSamples)
-                    break;
+
+    // Round-robin: take one object from each bin per pass until nSamples are
+    // collected or the bins are exhausted.
+    vector<int> sampled;
+    sampled.reserve(nSamples);
+    int round = 0;
+    while ((int)sampled.size() < nSamples) {
+        bool added = false;
+        for (int b = 0; b < nBins && (int)sampled.size() < nSamples; ++b) {
+            if ((int)bins[b].size() > round) {
+                sampled.push_back(bins[b][round]);
+                added = true;
             }
         }
-        ++i;
+        if (!added) break;  // no bin has an object at this depth -> done
+        ++round;
     }
-    return sampledMols;
+    (void)hardCap;  // count is now always capped exactly at nSamples
+
+    ArrayXi out((Index)sampled.size());
+    for (int i = 0; i < (int)sampled.size(); ++i) out(i) = sampled[i];
+    return out;
 }
 
 /* Refine a distance matrix by setting the diagonal to zero and symmetrizing the matrix

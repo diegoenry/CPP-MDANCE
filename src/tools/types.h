@@ -11,7 +11,16 @@
 
 #include <Eigen/Dense>
 
-using Eigen::ArrayXXd, Eigen::ArrayXd, Eigen::ArrayXi, Eigen::VectorXi, Eigen::Index, std::vector, std::pair, std::set, std::map, std::string;
+using Eigen::ArrayXXd;
+using Eigen::ArrayXd;
+using Eigen::ArrayXi;
+using Eigen::VectorXi;
+using Eigen::Index;
+using std::vector;
+using std::pair;
+using std::set;
+using std::map;
+using std::string;
 
 typedef ArrayXXd Mat;
 typedef ArrayXd Vec;
@@ -119,6 +128,7 @@ namespace MD {
                 case Metric::SM: return sm;
                 case Metric::SS1: return ss1;
                 case Metric::SS2: return ss2;
+                case Metric::MSD: return 0;
             }
             return 0;
         }

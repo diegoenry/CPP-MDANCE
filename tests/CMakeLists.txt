@@ -43,6 +43,7 @@ set(MDANCE_TEST_SOURCES
     test_main.cpp
     test_kmeans.cpp
     test_helm.cpp
+    test_algorithm_fixes.cpp
 )
 
 # Renamed from `test`: a target called `test` shadows the conventional

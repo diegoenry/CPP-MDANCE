@@ -153,12 +153,18 @@ void KmeansNANI::reduced_init_Mu(bool isComp) {
 
 void KmeansNANI::init_Mu() {
     vector<Index> idx;
+    if (kClusters > data.rows()) {
+        throw std::runtime_error(
+            "cannot form " + std::to_string(kClusters) + " clusters from " +
+            std::to_string(data.rows()) + " frames.");
+    }
     switch (kinit)
     {
     case MD::KinitType::Random:
         sampleRowsRandom();
         break;
     
+    case MD::KinitType::KmeansPP:
     case MD::KinitType::VanillaKmeansPP:
         sampleRowsPlusPlus();
         break;
@@ -184,6 +190,18 @@ void KmeansNANI::init_Mu() {
     // only take first kClusters centers
     if (centers.rows() > kClusters){
         centers = centers(Eigen::seq(0, kClusters-1), Eigen::placeholders::all).eval();
+    }
+    // The diversity-based seeders draw from `percentage`% of the frames, so on a
+    // short trajectory they can return fewer seeds than kClusters. Downstream,
+    // assignClosest still hands out labels in [0, kClusters) while `centers` has
+    // fewer rows than that, and calcMu indexes off the end -- a segfault in a
+    // release build. Fail with something the caller can act on instead.
+    if (centers.rows() < kClusters){
+        throw std::runtime_error(
+            "initialization produced only " + std::to_string(centers.rows()) +
+            " of the " + std::to_string(kClusters) + " requested centers; raise "
+            "the percentage of frames the seeder samples (--percentage) or ask "
+            "for fewer clusters.");
     }
 }
 
@@ -249,7 +267,7 @@ void KmeansNANI::run_lloyd(int Niter )  {
 }
 
 
-KmeansNANI::KmeansNANI(ArrayXXd data, int kClusters, MD::Metric mt, MD::KinitType kinit, int nAtoms, int percentage, int vectThreshold) : data(data), kClusters(kClusters), mt(mt), nAtoms(nAtoms), kinit(kinit), seed(seed), percentage(percentage) {
+KmeansNANI::KmeansNANI(ArrayXXd data, int kClusters, MD::Metric mt, MD::KinitType kinit, int nAtoms, int percentage, int vectThreshold) : data(data), kClusters(kClusters), mt(mt), nAtoms(nAtoms), kinit(kinit), seed(0), percentage(percentage) {
     centers = Mat::Zero(kClusters, data.cols());
     dist = Mat::Zero(data.rows(), kClusters);
     labels = Veci::Zero(data.rows());
@@ -258,7 +276,7 @@ KmeansNANI::KmeansNANI(ArrayXXd data, int kClusters, MD::Metric mt, MD::KinitTyp
     init_Mu();
     run_lloyd(300);
 }
-KmeansNANI::KmeansNANI(ArrayXXd data, int kClusters, MD::Metric mt, Mat centers, int nAtoms, int percentage, int vectThreshold) : data(data), kClusters(kClusters), mt(mt), nAtoms(nAtoms), kinit(kinit), seed(seed), percentage(percentage), centers(centers) {
+KmeansNANI::KmeansNANI(ArrayXXd data, int kClusters, MD::Metric mt, Mat centers, int nAtoms, int percentage, int vectThreshold) : data(data), kClusters(kClusters), mt(mt), nAtoms(nAtoms), kinit(MD::KinitType::StratAll), seed(0), percentage(percentage), centers(centers) {
     dist = Mat::Zero(data.rows(), kClusters);
     labels = Veci::Zero(data.rows());
     set_vectorization_threshold(vectThreshold);
