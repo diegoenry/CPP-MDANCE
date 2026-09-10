@@ -22,6 +22,12 @@ double calinskiHarabaszScore(const ArrayXXd& data, const VectorXi& labels) {
         }
     }
 
+    // With a single cluster there is no between-cluster dispersion and the
+    // ratio below is 0/0. sklearn rejects k < 2 outright; returning 0 keeps the
+    // score a real number for callers that serialize it.
+    if (clusters.size() < 2)
+        return 0;
+
     double extraDisp = 0;
     double intraDisp = 0;
     ArrayXd mean = data.colwise().sum() / data.rows();
