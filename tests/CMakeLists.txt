@@ -49,4 +49,11 @@ target_link_libraries(mdance_gtests PRIVATE
 # GoogleTest 1.15 requires C++14; the rest of this project is C++17.
 target_compile_features(mdance_gtests PRIVATE cxx_std_17)
 
-add_test(NAME mdance_tests COMMAND mdance_gtests)
+# The fixtures locate their data as
+#   current_path().parent_path().parent_path() / "tests" / "data"
+# (see the comment in test_kmeans.cpp), which only resolves when the working
+# directory is exactly two levels below the source root -- true for an in-source
+# build/tests/, false for every out-of-source build directory. Running the suite
+# from tests/data makes that expression resolve for any build layout.
+add_test(NAME mdance_tests COMMAND mdance_gtests
+         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/data)
