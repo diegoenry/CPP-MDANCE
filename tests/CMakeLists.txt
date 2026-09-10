@@ -1,6 +1,39 @@
 cmake_minimum_required(VERSION 3.15)
 
-find_package(GTest REQUIRED)
+# GoogleTest, handled like Eigen in src/CMakeLists.txt: prefer an installed
+# copy, fetch one when there is none, and if neither is possible skip the test
+# target rather than failing the configure -- someone who only wants to build
+# the library should not be required to have a test framework.
+find_package(GTest QUIET)
+option(MDANCE_FETCH_GTEST "Download GoogleTest when none is installed" ON)
+if(NOT GTest_FOUND AND MDANCE_FETCH_GTEST)
+    message(STATUS "GoogleTest not found; fetching v1.15.2")
+    include(FetchContent)
+    set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
+    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+    FetchContent_Declare(googletest
+        GIT_REPOSITORY https://github.com/google/googletest.git
+        GIT_TAG v1.15.2
+        GIT_SHALLOW TRUE
+        GIT_PROGRESS TRUE)
+    FetchContent_MakeAvailable(googletest)
+endif()
+
+# Target names differ by source: a modern FindGTest and the fetched build both
+# provide GTest::gtest_main, the fetched build also the bare gtest_main, and an
+# older FindGTest only GTest::Main.
+if(TARGET GTest::gtest_main)
+    set(MDANCE_GTEST_LIBS GTest::gtest GTest::gtest_main)
+elseif(TARGET gtest_main)
+    set(MDANCE_GTEST_LIBS gtest gtest_main)
+elseif(TARGET GTest::Main)
+    set(MDANCE_GTEST_LIBS GTest::GTest GTest::Main)
+else()
+    message(STATUS
+        "GoogleTest unavailable (and MDANCE_FETCH_GTEST=OFF); skipping the test "
+        "target. The library still builds.")
+    return()
+endif()
 
 # NOTE: do not name the target "test" -- that name is reserved by CMake once
 # CTest support is enabled, and it also shadows the conventional `make test`.
@@ -11,8 +44,9 @@ add_executable(mdance_gtests test_utils.cpp
                     test_bts.cpp
 )
 target_link_libraries(mdance_gtests PRIVATE
-                    GTest::GTest
-                    GTest::Main
+                    ${MDANCE_GTEST_LIBS}
                     mdance)
+# GoogleTest 1.15 requires C++14; the rest of this project is C++17.
+target_compile_features(mdance_gtests PRIVATE cxx_std_17)
 
 add_test(NAME mdance_tests COMMAND mdance_gtests)
