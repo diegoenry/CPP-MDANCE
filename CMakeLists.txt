@@ -11,5 +11,9 @@ set(CMAKE_CXX_FLAGS_DEBUG "-g -O0" CACHE STRING "Debug flags" FORCE)
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -march=native -DNDEBUG" CACHE STRING "Release flags" FORCE)
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-g -O2 -DNDEBUG" CACHE STRING "RelWithDebInfo flags" FORCE)
 
+# Enable testing at the top level so `ctest` from the build root discovers tests
+# registered in subdirectories (must precede the add_subdirectory calls below).
+enable_testing()
+
 add_subdirectory(src)
 add_subdirectory(tests)
