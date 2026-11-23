@@ -1,3 +1,6 @@
+// Adapted from KMeansRex (https://github.com/michaelchughes/KMeansRex).
+// Copyright (c) 2013-2015, Michael C. Hughes. BSD 3-Clause License: see LICENSE
+// in this directory.
 #pragma once
 
 #include <iostream>

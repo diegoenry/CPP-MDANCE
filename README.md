@@ -8,7 +8,9 @@ Each [release](https://github.com/mqcomplab/CPP-MDANCE/releases) has a self-cont
 Windows (x86_64). It is the one program the [VMDance](https://github.com/diegoenry/vmd-mdance-plugin)
 plugin for VMD needs: put it in the plugin's `vmdance` folder, or set `MDANCE_CLI` to it.
 On macOS, clear the quarantine a browser download gets before running it:
-`xattr -d com.apple.quarantine mdance-cli`.
+`xattr -d com.apple.quarantine mdance-cli`. Each archive carries `LICENSE` and
+`THIRD-PARTY-NOTICES.txt`, the licenses of the code it includes; anyone redistributing the
+binary (bundling it with a plugin, for instance) must keep both with it.
 
 The archives come from `.github/workflows/release.yml` when a `v*` tag is pushed. To build
 the same kind of binary yourself, configure with `-DMDANCE_PORTABLE=ON`. A default build
