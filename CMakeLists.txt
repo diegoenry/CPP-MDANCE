@@ -8,10 +8,38 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "RelWithDebInfo")
 endif()
 
-# Compiler flags for different build types
-set(CMAKE_CXX_FLAGS_DEBUG "-g -O0" CACHE STRING "Debug flags" FORCE)
-set(CMAKE_CXX_FLAGS_RELEASE "-O3 -march=native -DNDEBUG" CACHE STRING "Release flags" FORCE)
-set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-g -O2 -DNDEBUG" CACHE STRING "RelWithDebInfo flags" FORCE)
+# Binaries handed to other people (the release archives, see
+# .github/workflows/release.yml) must run on machines other than the one that
+# built them. A default build tunes for the build machine's CPU, which makes a
+# binary built on a CI runner die with "illegal instruction" on an older CPU
+# and cannot be combined with a macOS universal (two-architecture) build.
+option(MDANCE_PORTABLE
+    "Build binaries to redistribute: no -march=native, and the C++ runtime linked in"
+    OFF)
+
+if(MSVC)
+    # The GCC-style flags below mean nothing to MSVC, which ignores them with a
+    # warning and would leave a Release build unoptimised; CMake's own MSVC
+    # defaults (/O2 /Ob2 /DNDEBUG) are right. /permissive- for standard C++
+    # (e.g. the `and`/`or`/`not` keywords), /bigobj for Eigen-heavy units.
+    add_compile_options(/permissive- /bigobj)
+    if(MDANCE_PORTABLE)
+        # The static CRT, so the .exe does not need the Visual C++
+        # Redistributable installed. tests/CMakeLists.txt builds GoogleTest to match.
+        set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    endif()
+else()
+    set(CMAKE_CXX_FLAGS_DEBUG "-g -O0" CACHE STRING "Debug flags" FORCE)
+    set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG" CACHE STRING "Release flags" FORCE)
+    set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-g -O2 -DNDEBUG" CACHE STRING "RelWithDebInfo flags" FORCE)
+    if(NOT MDANCE_PORTABLE)
+        add_compile_options($<$<CONFIG:Release>:-march=native>)
+    elseif(NOT APPLE)
+        # libstdc++ and libgcc linked in: the binary then needs only the C
+        # library (glibc) of the system it runs on. macOS's libc++ is the OS's.
+        add_link_options(-static-libstdc++ -static-libgcc)
+    endif()
+endif()
 
 # Enable testing at the top level so `ctest` run from the build root discovers
 # the tests registered in subdirectories (must precede add_subdirectory).

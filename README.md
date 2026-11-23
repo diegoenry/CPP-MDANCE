@@ -1,6 +1,19 @@
 # CPP-MDANCE
 A c++ implementation of MDANCE, a flexible n-ary clustering package for all applications 
 
+## Prebuilt `mdance-cli`
+
+Each [release](https://github.com/mqcomplab/CPP-MDANCE/releases) has a self-contained
+`mdance-cli` for Linux (x86_64, glibc 2.28 or later), macOS (Apple Silicon, 11 or later) and
+Windows (x86_64). It is the one program the [VMDance](https://github.com/diegoenry/vmd-mdance-plugin)
+plugin for VMD needs: put it in the plugin's `vmdance` folder, or set `MDANCE_CLI` to it.
+On macOS, clear the quarantine a browser download gets before running it:
+`xattr -d com.apple.quarantine mdance-cli`.
+
+The archives come from `.github/workflows/release.yml` when a `v*` tag is pushed. To build
+the same kind of binary yourself, configure with `-DMDANCE_PORTABLE=ON`. A default build
+tunes for the CPU it is built on (`-march=native`), so it may not run on another machine.
+
 ## Getting Started with MDance
 
 Before you begin, make sure you have **Eigen** installed.
