@@ -1,4 +1,8 @@
 /* An adapted version of KMeansRexCore.cpp
+(https://github.com/michaelchughes/KMeansRex)
+Copyright (c) 2013-2015, Michael C. Hughes. BSD 3-Clause License: see LICENSE
+in this directory.
+
 A fast, easy-to-read implementation of the K-Means clustering algorithm.
 allowing customized initialization (random samples or plus plus)
 and vectorized execution via the Eigen matrix template library.

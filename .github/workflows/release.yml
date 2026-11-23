@@ -126,12 +126,14 @@ jobs:
           if [[ "$GITHUB_REF_TYPE" == tag ]]; then version=$GITHUB_REF_NAME; else version=dev-${GITHUB_SHA::7}; fi
           name=mdance-cli-$version-${{ matrix.platform }}
           mkdir -p "dist/$name"
-          cp stage/bin/mdance-cli${{ matrix.exe }} LICENSE "dist/$name/"
+          cp stage/bin/mdance-cli${{ matrix.exe }} LICENSE THIRD-PARTY-NOTICES.txt "dist/$name/"
           cat > "dist/$name/README.txt" <<EOF
           mdance-cli $version (${{ matrix.platform }}) - https://github.com/$GITHUB_REPOSITORY
 
           The command-line front end of CPP-MDANCE, and the backend the VMDance
           plugin for VMD runs. Self-contained: nothing else to install.
+          MIT License (LICENSE); the code it includes from other projects, and
+          their licenses, are listed in THIRD-PARTY-NOTICES.txt.
 
           For VMDance, put mdance-cli${{ matrix.exe }} in the plugin's vmdance folder (or
           its bin folder), or anywhere and set MDANCE_CLI to it, or choose it in

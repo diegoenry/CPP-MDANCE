@@ -63,6 +63,10 @@ target_link_libraries(mdance_tools PUBLIC Eigen3::Eigen)
 # reaches all of them. Without it they compile at the compiler's default
 # standard, which is C++17 for current GCC but C++14 for MSVC and AppleClang.
 target_compile_features(mdance_tools PUBLIC cxx_std_17)
+# Eigen is MPL 2.0, but a few of its files are LGPL. EIGEN_MPL2_ONLY makes
+# including one of those a compile error, so the binaries never take on the
+# LGPL's obligations (see THIRD-PARTY-NOTICES.txt).
+target_compile_definitions(mdance_tools PUBLIC EIGEN_MPL2_ONLY)
 
 # create library for kmeans
 add_library(mdance_kmeans STATIC 
