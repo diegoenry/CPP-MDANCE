@@ -1,0 +1,189 @@
+name: release
+
+# Builds mdance-cli -- the one program the VMDance plugin needs -- as a
+# self-contained binary for Linux, macOS and Windows, tests each one, and for a
+# v* tag attaches the archives to a draft GitHub release.
+#
+#   git tag v1.0.0 && git push origin v1.0.0     -> draft release, publish it by hand
+#   a tag with a hyphen (v1.1.0-rc.1)            -> marked as a pre-release
+#   Actions > release > Run workflow             -> archives as run artifacts only
+
+on:
+  push:
+    tags: ['v*']
+  pull_request:
+    paths-ignore: ['docs/**', '**.md', 'tcl/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    name: ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    # manylinux_2_28 (AlmaLinux 8, glibc 2.28): a binary built there runs on
+    # any Linux from about 2018 on (RHEL/Rocky 8+, Ubuntu 20.04+, Debian 10+),
+    # which a binary built on ubuntu-latest (glibc 2.39) would not.
+    container: ${{ matrix.container }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux-x86_64
+            os: ubuntu-latest
+            container: quay.io/pypa/manylinux_2_28_x86_64
+          - platform: macos-arm64
+            os: macos-latest
+            cmake_args: -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
+          - platform: windows-x86_64
+            os: windows-latest
+            exe: .exe
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # NumPy for tests/validate_equal_prime.py, which runs the built
+      # mdance-cli against an independent NumPy reference.
+      - name: Python (manylinux image)
+        if: matrix.container != ''
+        run: |
+          echo /opt/python/cp312-cp312/bin >> "$GITHUB_PATH"
+          echo Python3_ROOT_DIR=/opt/python/cp312-cp312 >> "$GITHUB_ENV"
+      - name: Python
+        if: matrix.container == ''
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: NumPy
+        run: python -m pip install numpy
+
+      # MDANCE_PORTABLE: no -march=native, the C++ runtime linked in (see the
+      # top-level CMakeLists.txt). Eigen and GoogleTest are always fetched at
+      # their pinned versions, so every platform builds the same sources
+      # whatever the runner image has installed.
+      - name: Configure
+        run: >
+          cmake -S . -B build
+          -DCMAKE_BUILD_TYPE=Release
+          -DMDANCE_PORTABLE=ON
+          -DBUILD_SHARED=OFF
+          -DBUILD_TCL=OFF
+          -DCMAKE_DISABLE_FIND_PACKAGE_Eigen3=ON
+          -DCMAKE_DISABLE_FIND_PACKAGE_GTest=ON
+          ${{ matrix.cmake_args }}
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Test
+        run: |
+          ctest --test-dir build -C Release --output-on-failure
+          # The NumPy cross-check registers only when NumPy imports; make its
+          # absence a failure here rather than a test silently not run.
+          [[ $(ctest --test-dir build -C Release -N) == *validate_equal_prime* ]]
+
+      - name: Stage
+        run: cmake --install build --config Release --strip --prefix stage
+
+      # What VMDance does with the program: runs it without arguments and
+      # reads the algorithms from the usage line. Then one real clustering.
+      - name: Smoke test
+        run: |
+          cli=stage/bin/mdance-cli${{ matrix.exe }}
+          usage=$("$cli" 2>&1) || true
+          grep -E -- '--algorithm \{[a-z|]+\}' <<<"$usage"
+          "$cli" --algorithm kmeans --input tests/data/sim.csv \
+                 --output smoke.json --natoms 50 --nclusters 10
+          grep -q '"labels"' smoke.json
+
+      # Fail if the binary picked up a shared library a user's machine may not
+      # have: libstdc++ on Linux, Homebrew on macOS, the Visual C++ runtime
+      # (vcruntime140.dll / msvcp140.dll) on Windows.
+      - name: Check dependencies
+        run: |
+          cli=stage/bin/mdance-cli${{ matrix.exe }}
+          case "${{ runner.os }}" in
+            Linux)   deps=$(ldd "$cli");  bad=$(grep -E 'libstdc\+\+|libgcc_s' <<<"$deps" || true)
+                     echo "newest glibc symbol: $(objdump -T "$cli" | grep -oE 'GLIBC_[0-9.]+' | sort -uV | tail -1)" ;;
+            macOS)   deps=$(otool -L "$cli"); bad=$(tail -n +2 <<<"$deps" | grep -vE '^[[:space:]]+/(usr/lib|System)/' || true)
+                     vtool -show-build "$cli" | grep minos ;;
+            Windows) deps=$(ldd "$cli");  bad=$(grep -iE 'vcruntime|msvcp' <<<"$deps" || true) ;;
+          esac
+          echo "$deps"
+          if [[ -n "$bad" ]]; then
+            echo "::error::mdance-cli depends on a library users may not have: $bad"
+            exit 1
+          fi
+
+      - name: Package
+        run: |
+          if [[ "$GITHUB_REF_TYPE" == tag ]]; then version=$GITHUB_REF_NAME; else version=dev-${GITHUB_SHA::7}; fi
+          name=mdance-cli-$version-${{ matrix.platform }}
+          mkdir -p "dist/$name"
+          cp stage/bin/mdance-cli${{ matrix.exe }} LICENSE "dist/$name/"
+          cat > "dist/$name/README.txt" <<EOF
+          mdance-cli $version (${{ matrix.platform }}) - https://github.com/$GITHUB_REPOSITORY
+
+          The command-line front end of CPP-MDANCE, and the backend the VMDance
+          plugin for VMD runs. Self-contained: nothing else to install.
+
+          For VMDance, put mdance-cli${{ matrix.exe }} in the plugin's vmdance folder (or
+          its bin folder), or anywhere and set MDANCE_CLI to it, or choose it in
+          VMDance's Settings > Backend.
+
+          macOS: a file downloaded by a browser is quarantined, and macOS refuses
+          to run it ("cannot be opened"). Clear that once with
+              xattr -d com.apple.quarantine mdance-cli
+          EOF
+          cd dist
+          if [[ "${{ runner.os }}" == Windows ]]; then
+            7z a -tzip "$name.zip" "$name" > /dev/null
+          else
+            tar -czf "$name.tar.gz" "$name"
+          fi
+          rm -r "$name"
+          ls -l
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: mdance-cli-${{ matrix.platform }}
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    needs: build
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          pattern: mdance-cli-*
+          merge-multiple: true
+
+      - name: Checksums
+        run: cd dist && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
+
+      # A draft, so a person looks at it before anyone can download it. A rerun
+      # of the same tag replaces the files of the release already there.
+      - name: Draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber
+          else
+            flags=(--draft --generate-notes --title "$TAG")
+            [[ "$TAG" == *-* ]] && flags+=(--prerelease)
+            gh release create "$TAG" dist/* "${flags[@]}"
+          fi

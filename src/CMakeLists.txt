@@ -59,6 +59,10 @@ add_library(mdance_tools STATIC
 target_include_directories(mdance_tools PUBLIC
     tools)
 target_link_libraries(mdance_tools PUBLIC Eigen3::Eigen)
+# The core uses C++17. Every library below links mdance_tools PUBLIC, so this
+# reaches all of them. Without it they compile at the compiler's default
+# standard, which is C++17 for current GCC but C++14 for MSVC and AppleClang.
+target_compile_features(mdance_tools PUBLIC cxx_std_17)
 
 # create library for kmeans
 add_library(mdance_kmeans STATIC 
